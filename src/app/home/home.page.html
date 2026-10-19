@@ -1,0 +1,234 @@
+<ion-header [translucent]="true" class="ion-no-border">
+  <ion-toolbar color="primary">
+    <ion-title>
+      <div class="toolbar-title-wrap">
+        <strong>DAM CRM</strong>
+        <span class="subtitle">— Gestión de Clientes (Supabase + RBAC)</span>
+      </div>
+    </ion-title>
+    <ion-buttons slot="end">
+      <ion-badge [color]="isAdmin() === 'admin' ? 'success' : 'medium'" class="role-badge">
+        <ion-icon [name]="isAdmin() === 'admin' ? 'shield-checkmark-outline' : 'person-outline'"></ion-icon>
+        {{ isAdmin() === 'admin' ? 'ADMIN' : 'USER (LECTOR)' }}
+      </ion-badge>
+    </ion-buttons>
+  </ion-toolbar>
+
+  <!-- Barra interactiva de simulación de rol y estado de autenticación (CE 3.d) -->
+  <ion-toolbar color="light" class="role-selector-bar">
+    <ion-grid>
+      <ion-row class="ion-align-items-center">
+        <ion-col size="12" size-md="6">
+          <div class="user-info-chip">
+            <ion-icon name="person-circle-outline"></ion-icon>
+            <span class="user-email">{{ currentUser()?.email || 'Sin sesión activa' }}</span>
+            <span class="policy-tag">{{ isAdmin() === 'admin' ? 'RLS: Full Access (CRUD)' : 'RLS: Solo Lectura (SELECT)' }}</span>
+          </div>
+        </ion-col>
+        <ion-col size="12" size-md="6">
+          <ion-segment [value]="isAdmin() || 'user'" (ionChange)="onRoleChange($event)" class="role-segment">
+            <ion-segment-button value="admin">
+              <ion-icon name="shield-checkmark-outline"></ion-icon>
+              <ion-label>Modo Admin</ion-label>
+            </ion-segment-button>
+            <ion-segment-button value="user">
+              <ion-icon name="person-outline"></ion-icon>
+              <ion-label>Modo Usuario</ion-label>
+            </ion-segment-button>
+          </ion-segment>
+        </ion-col>
+      </ion-row>
+    </ion-grid>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content class="ion-padding main-content">
+  <ion-grid class="content-container">
+    <ion-row>
+      <!-- COLUMNA / FORMULARIO REACTIVO (Solo visible para Administradores con RBAC: @if) -->
+      @if (isAdmin() === 'admin') {
+        <ion-col size="12" size-lg="5" class="form-col">
+          <ion-card id="client-form-card" class="crud-card animate-fade-in">
+            <ion-card-header>
+              <div class="card-header-flex">
+                <ion-card-title>
+                  <ion-icon [name]="editingClientId ? 'create-outline' : 'add-circle-outline'" color="primary"></ion-icon>
+                  {{ editingClientId ? 'Editar Cliente' : 'Nuevo Cliente' }}
+                </ion-card-title>
+                @if (editingClientId) {
+                  <ion-badge color="warning">Modo Edición</ion-badge>
+                }
+              </div>
+            </ion-card-header>
+
+            <ion-card-content>
+              <form [formGroup]="clientForm" (ngSubmit)="saveClient()">
+                <!-- Campo Nombre -->
+                <ion-item lines="inset" class="form-item">
+                  <ion-label position="stacked">Nombre completo *</ion-label>
+                  <ion-input
+                    type="text"
+                    formControlName="nombre"
+                    placeholder="Ej. Ana García"
+                    [clearInput]="true">
+                  </ion-input>
+                </ion-item>
+                @if (clientForm.get('nombre')?.invalid && (clientForm.get('nombre')?.dirty || clientForm.get('nombre')?.touched)) {
+                  <div class="field-error">
+                    <ion-icon name="alert-circle-outline"></ion-icon>
+                    <span>El nombre es obligatorio (mínimo 3 caracteres).</span>
+                  </div>
+                }
+
+                <!-- Campo Empresa -->
+                <ion-item lines="inset" class="form-item">
+                  <ion-label position="stacked">Empresa / Organización *</ion-label>
+                  <ion-input
+                    type="text"
+                    formControlName="empresa"
+                    placeholder="Ej. TechSolutions SL"
+                    [clearInput]="true">
+                  </ion-input>
+                </ion-item>
+                @if (clientForm.get('empresa')?.invalid && (clientForm.get('empresa')?.dirty || clientForm.get('empresa')?.touched)) {
+                  <div class="field-error">
+                    <ion-icon name="alert-circle-outline"></ion-icon>
+                    <span>La empresa es un campo obligatorio.</span>
+                  </div>
+                }
+
+                <!-- Campo Email -->
+                <ion-item lines="inset" class="form-item">
+                  <ion-label position="stacked">Correo Electrónico Corporativo *</ion-label>
+                  <ion-input
+                    type="email"
+                    formControlName="email"
+                    placeholder="Ej. contacto@empresa.com"
+                    [clearInput]="true">
+                  </ion-input>
+                </ion-item>
+                @if (clientForm.get('email')?.invalid && (clientForm.get('email')?.dirty || clientForm.get('email')?.touched)) {
+                  <div class="field-error">
+                    <ion-icon name="alert-circle-outline"></ion-icon>
+                    <span>Introduce una dirección de correo válida.</span>
+                  </div>
+                }
+
+                <!-- Acciones del Formulario -->
+                <div class="ion-margin-top form-actions">
+                  <ion-button
+                    type="submit"
+                    expand="block"
+                    [color]="editingClientId ? 'warning' : 'primary'"
+                    [disabled]="clientForm.invalid">
+                    <ion-icon slot="start" [name]="editingClientId ? 'checkmark-circle-outline' : 'add-circle-outline'"></ion-icon>
+                    {{ editingClientId ? 'Actualizar Cliente' : 'Guardar Cliente' }}
+                  </ion-button>
+
+                  @if (editingClientId) {
+                    <ion-button
+                      type="button"
+                      fill="outline"
+                      expand="block"
+                      color="medium"
+                      (click)="resetForm()">
+                      <ion-icon slot="start" name="close-outline"></ion-icon>
+                      Cancelar Edición
+                    </ion-button>
+                  }
+                </div>
+              </form>
+            </ion-card-content>
+          </ion-card>
+        </ion-col>
+      }
+
+      <!-- COLUMNA / LISTADO DE CLIENTES -->
+      <ion-col size="12" [attr.size-lg]="isAdmin() === 'admin' ? 7 : 12" class="list-col">
+        <ion-card class="list-card">
+          <ion-card-header>
+            <div class="list-header-flex">
+              <div>
+                <ion-card-title>Listado de Clientes</ion-card-title>
+                <ion-note color="medium">
+                  {{ clients.length }} {{ clients.length === 1 ? 'cliente registrado' : 'clientes registrados' }} en PostgreSQL / Supabase
+                </ion-note>
+              </div>
+              @if (isAdmin() === 'admin') {
+                <ion-badge color="tertiary" class="swipe-hint">
+                  <ion-icon name="phone-portrait-outline"></ion-icon> Desliza filas para Editar o Borrar
+                </ion-badge>
+              } @else {
+                <ion-badge color="light" class="readonly-badge">
+                  <ion-icon name="shield-checkmark-outline"></ion-icon> Vista de solo lectura
+                </ion-badge>
+              }
+            </div>
+          </ion-card-header>
+
+          <ion-card-content class="ion-no-padding">
+            <ion-list lines="full" class="clients-list">
+              @for (client of clients; track client.id) {
+                <ion-item-sliding [disabled]="isAdmin() !== 'admin'">
+                  <ion-item class="client-item" [class.editing-active]="editingClientId === client.id">
+                    <div class="client-avatar" slot="start">
+                      {{ client.nombre.charAt(0).toUpperCase() }}
+                    </div>
+                    <ion-label>
+                      <h2 class="client-name">{{ client.nombre }}</h2>
+                      <p class="client-meta">
+                        <ion-icon name="business-outline"></ion-icon> {{ client.empresa }}
+                        <span class="separator">•</span>
+                        <ion-icon name="mail-outline"></ion-icon> {{ client.email }}
+                      </p>
+                    </ion-label>
+
+                    <!-- Acciones directas visibles en escritorio si es admin -->
+                    @if (isAdmin() === 'admin') {
+                      <div class="desktop-actions" slot="end">
+                        <ion-button fill="clear" size="small" color="primary" (click)="editClient(client); $event.stopPropagation()">
+                          <ion-icon slot="icon-only" name="create-outline"></ion-icon>
+                        </ion-button>
+                        <ion-button fill="clear" size="small" color="danger" (click)="deleteClient(client.id!); $event.stopPropagation()">
+                          <ion-icon slot="icon-only" name="trash-outline"></ion-icon>
+                        </ion-button>
+                      </div>
+                    }
+                  </ion-item>
+
+                  <!-- Opciones al deslizar nativo (Solo Administradores según PDF Paso 2.6) -->
+                  @if (isAdmin() === 'admin') {
+                    <ion-item-options side="end">
+                      <ion-item-option color="primary" (click)="editClient(client)">
+                        <ion-icon slot="icon-only" name="create-outline"></ion-icon>
+                      </ion-item-option>
+                      <ion-item-option color="danger" (click)="deleteClient(client.id!)">
+                        <ion-icon slot="icon-only" name="trash-outline"></ion-icon>
+                      </ion-item-option>
+                    </ion-item-options>
+                  }
+                </ion-item-sliding>
+              } @empty {
+                <ion-item lines="none" class="empty-item">
+                  <ion-label color="medium" class="ion-text-center">
+                    <p class="empty-title">No hay clientes registrados.</p>
+                    <p class="empty-subtitle">Usa el formulario superior para añadir el primer cliente.</p>
+                  </ion-label>
+                </ion-item>
+              }
+            </ion-list>
+          </ion-card-content>
+        </ion-card>
+      </ion-col>
+    </ion-row>
+  </ion-grid>
+
+  <!-- Notificaciones Toast de confirmación / error -->
+  <ion-toast
+    [isOpen]="isToastOpen"
+    [message]="toastMessage"
+    duration="2500"
+    [position]="'bottom'"
+    (didDismiss)="setToastOpen(false)">
+  </ion-toast>
+</ion-content>
