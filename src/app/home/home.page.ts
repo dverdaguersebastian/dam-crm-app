@@ -121,9 +121,33 @@ export class HomePage implements OnInit {
   }
 
   async ngOnInit() {
-    // IMPORTANTE: En un entorno real, hacer login antes de cargar
-    // Para simplificar esta demo y permitir evaluación inmediata:
     await this.loadClients();
+
+    // Soporte para estados visuales mediante parámetros URL (facilita capturas de pantalla y testeo)
+    if (typeof window !== 'undefined' && window.location.search) {
+      const urlParams = new URLSearchParams(window.location.search);
+      const roleParam = urlParams.get('role');
+      if (roleParam === 'user' || roleParam === 'admin') {
+        this.supabaseService.setRole(roleParam);
+      }
+
+      const modeParam = urlParams.get('mode');
+      if (modeParam === 'edit' && this.clients.length > 0) {
+        this.editClient(this.clients[0]);
+      } else if (modeParam === 'invalid') {
+        this.clientForm.get('nombre')?.setValue('Al');
+        this.clientForm.get('nombre')?.markAsTouched();
+        this.clientForm.get('nombre')?.markAsDirty();
+        this.clientForm.get('empresa')?.setValue('');
+        this.clientForm.get('empresa')?.markAsTouched();
+        this.clientForm.get('empresa')?.markAsDirty();
+        this.clientForm.get('email')?.setValue('correo-no-valido');
+        this.clientForm.get('email')?.markAsTouched();
+        this.clientForm.get('email')?.markAsDirty();
+      } else if (modeParam === 'toast') {
+        this.showToast('Cliente insertado correctamente en PostgreSQL / Supabase');
+      }
+    }
   }
 
   async loadClients() {

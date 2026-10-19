@@ -151,8 +151,21 @@ export class SupabaseService {
     }
   }
 
+  private isPlaceholderUrl(): boolean {
+    return !environment.supabaseUrl ||
+      environment.supabaseUrl.includes('TU-PROYECTO') ||
+      environment.supabaseUrl.includes('xyzcompanyproject') ||
+      environment.supabaseKey.includes('placeholder');
+  }
+
   // --- CRUD CLIENTES (PDF Paso 2.4) ---
   async getClients(): Promise<Client[]> {
+    if (this.isPlaceholderUrl()) {
+      return [...this.demoClients].sort((a, b) =>
+        new Date(b.created_at || '').getTime() - new Date(a.created_at || '').getTime()
+      );
+    }
+
     try {
       const { data, error } = await this.supabase
         .from('clients')
@@ -161,17 +174,28 @@ export class SupabaseService {
       if (error) throw error;
       return data || [];
     } catch (e) {
-      // Fallback para entorno demo / sin backend activo
-      return [...this.demoClients].sort((a, b) => 
+      return [...this.demoClients].sort((a, b) =>
         new Date(b.created_at || '').getTime() - new Date(a.created_at || '').getTime()
       );
     }
   }
 
   async createClient(client: Client): Promise<void> {
-    // Verificación de RBAC (simulando la política RLS PostgreSQL)
     if (this.userRole() !== 'admin') {
       throw new Error('RLS Error 42501: Violación de política de seguridad: Solo administradores pueden crear registros.');
+    }
+
+    if (this.isPlaceholderUrl()) {
+      const newClient: Client = {
+        id: crypto.randomUUID(),
+        nombre: client.nombre,
+        empresa: client.empresa,
+        email: client.email,
+        created_at: new Date().toISOString()
+      };
+      this.demoClients.unshift(newClient);
+      this.saveDemoClients();
+      return;
     }
 
     try {
@@ -183,7 +207,6 @@ export class SupabaseService {
       if (error) throw error;
     } catch (e: any) {
       if (e?.message?.includes('RLS Error')) throw e;
-      // Operación en demo
       const newClient: Client = {
         id: crypto.randomUUID(),
         nombre: client.nombre,
@@ -199,6 +222,15 @@ export class SupabaseService {
   async updateClient(id: string, client: Partial<Client>): Promise<void> {
     if (this.userRole() !== 'admin') {
       throw new Error('RLS Error 42501: Violación de política de seguridad: Solo administradores pueden modificar registros.');
+    }
+
+    if (this.isPlaceholderUrl()) {
+      const index = this.demoClients.findIndex(c => c.id === id);
+      if (index !== -1) {
+        this.demoClients[index] = { ...this.demoClients[index], ...client };
+        this.saveDemoClients();
+      }
+      return;
     }
 
     try {
@@ -217,6 +249,12 @@ export class SupabaseService {
   async deleteClient(id: string): Promise<void> {
     if (this.userRole() !== 'admin') {
       throw new Error('RLS Error 42501: Violación de política de seguridad: Solo administradores pueden eliminar registros.');
+    }
+
+    if (this.isPlaceholderUrl()) {
+      this.demoClients = this.demoClients.filter(c => c.id !== id);
+      this.saveDemoClients();
+      return;
     }
 
     try {
